@@ -7,6 +7,14 @@ function assertEnv(name: string): string {
   return v;
 }
 
+// Allow: letters, numbers, space, dash, comma, dot, slash
+// Length: 6–20 characters
+const ALLOWED_RE = /^[A-Za-z0-9,\- .\/]{6,20}$/;
+
+function normalize(raw: string) {
+  return raw.replace(/[\r\n]+/g, '').replace(/\s+/g, ' ').trim();
+}
+
 async function buildPdfBase64(code: string): Promise<string> {
   // 4x6 inches at 72 points/inch:
   const width = 4 * 72;  // 288
@@ -17,11 +25,12 @@ async function buildPdfBase64(code: string): Promise<string> {
 
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  // Start large and shrink until it fits width with some margin
+  // Start large and shrink until it fits width with a margin
   const margin = 24; // points
   let fontSize = 220;
 
   const maxWidth = width - margin * 2;
+
   while (fontSize > 24) {
     const textWidth = font.widthOfTextAtSize(code, fontSize);
     if (textWidth <= maxWidth) break;
@@ -45,7 +54,8 @@ async function printWithPrintNode(pdfBase64: string, title: string) {
   const printerId = Number(assertEnv('PRINTNODE_PRINTER_ID'));
   if (!Number.isFinite(printerId)) throw new Error('PRINTNODE_PRINTER_ID must be a number');
 
-  const auth = Buffer.from(`${apiKey}:`).toString('base64'); // Basic auth: apiKey as username, blank password :contentReference[oaicite:4]{index=4}
+  // Basic auth: API key as username, blank password
+  const auth = Buffer.from(`${apiKey}:`).toString('base64');
 
   const res = await fetch('https://api.printnode.com/printjobs', {
     method: 'POST',
@@ -58,7 +68,7 @@ async function printWithPrintNode(pdfBase64: string, title: string) {
       title,
       contentType: 'pdf_base64',
       content: pdfBase64,
-      source: 'barcode-number-label-webapp',
+      source: 'tailoring-number-label-webapp',
     }),
   });
 
@@ -67,18 +77,20 @@ async function printWithPrintNode(pdfBase64: string, title: string) {
     throw new Error(`PrintNode error ${res.status}: ${text}`);
   }
 
-  // Response is printjob id (number) per docs
   const id = await res.json().catch(() => null);
   return id;
 }
 
 export async function POST(req: Request) {
   try {
-    const { code } = (await req.json()) as { code?: string };
-    const clean = (code ?? '').trim();
+    const body = (await req.json().catch(() => ({}))) as { code?: string };
+    const clean = normalize(body.code ?? '');
 
-    if (!/^\d{6,10}$/.test(clean)) {
-      return NextResponse.json({ error: 'Code must be 6–8 digits.' }, { status: 400 });
+    if (!ALLOWED_RE.test(clean)) {
+      return NextResponse.json(
+        { error: 'Invalid code. Use 6–20 chars: letters/numbers, space, -, comma, ., /' },
+        { status: 400 }
+      );
     }
 
     const pdfBase64 = await buildPdfBase64(clean);

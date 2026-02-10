@@ -8,23 +8,26 @@ export default function Home() {
   const [status, setStatus] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // Allow: letters, numbers, space, dash, comma, dot, slash
+  // Length: 6–20 characters
+  const ALLOWED_RE = /^[A-Za-z0-9,\- .\/]{6,20}$/;
+
   useEffect(() => {
-    // Focus once on load. No global click handlers.
     inputRef.current?.focus();
   }, []);
 
   function normalize(raw: string) {
-    // Keep digits only (handles scanners that add CR/LF)
-    return raw.replace(/[^\d]/g, '');
+    // Strip scanner CR/LF, collapse weird whitespace, trim ends
+    return raw.replace(/[\r\n]+/g, '').replace(/\s+/g, ' ').trim();
   }
 
-  async function doPrint(code: string) {
+  async function doPrint(input: string) {
     if (isPrinting) return;
 
-    const clean = normalize(code);
+    const clean = normalize(input);
 
-    if (!/^\d{6,10}$/.test(clean)) {
-      setStatus('Error: Code must be 6–8 digits.');
+    if (!ALLOWED_RE.test(clean)) {
+      setStatus('Error: Use 6–20 chars. Allowed: letters/numbers, space, -, comma, ., /');
       return;
     }
 
@@ -47,7 +50,6 @@ export default function Home() {
       setStatus(`Error: ${e?.message ?? 'Unknown error'}`);
     } finally {
       setIsPrinting(false);
-      // Refocus after everything settles so it doesn't block clicks
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }
@@ -63,13 +65,21 @@ export default function Home() {
         background: '#fafafa',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 720, background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: 20 }}>
-        <h1 style={{ fontSize: 32, margin: 0 }}>Scan → Print (Big Number)</h1>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 720,
+          background: '#fff',
+          border: '1px solid #eee',
+          borderRadius: 16,
+          padding: 20,
+        }}
+      >
+        <h1 style={{ fontSize: 32, margin: 0 }}>Scan → Print (Big Code)</h1>
         <p style={{ marginTop: 8, marginBottom: 18, opacity: 0.75 }}>
-          Enter/scan 6–8 digits. Press Enter or tap Print.
+          Enter/scan a code (6–20 chars). Allowed: letters/numbers, space, -, comma, ., /
         </p>
 
-        {/* Form submit makes the button click 100% reliable across browsers */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -80,7 +90,6 @@ export default function Home() {
             ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            inputMode="numeric"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -88,12 +97,12 @@ export default function Home() {
             placeholder="Scan here…"
             style={{
               width: '100%',
-              fontSize: 56,
+              fontSize: 44,
               padding: '16px 16px',
               borderRadius: 14,
               border: '2px solid #ccc',
               outline: 'none',
-              letterSpacing: 2,
+              letterSpacing: 1,
             }}
           />
 
@@ -111,7 +120,7 @@ export default function Home() {
                 fontSize: 18,
                 fontWeight: 600,
                 cursor: isPrinting ? 'not-allowed' : 'pointer',
-                touchAction: 'manipulation', // improves tap reliability on iOS
+                touchAction: 'manipulation',
               }}
             >
               {isPrinting ? 'Printing…' : 'Print'}
@@ -143,7 +152,7 @@ export default function Home() {
         <div style={{ marginTop: 14, fontSize: 18 }}>{status}</div>
 
         <div style={{ marginTop: 14, opacity: 0.65, fontSize: 14, lineHeight: 1.4 }}>
-          Tip: If you’re using an iPad, tap into the input once, then scanning will keep filling it.
+          Tip: scanners often add an Enter—this form works with Enter or the Print button.
         </div>
       </div>
     </div>
