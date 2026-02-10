@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     const { code } = (await req.json()) as { code?: string };
     const clean = (code ?? '').trim();
 
-    if (!/^\d{6,8}$/.test(clean)) {
+    if (!/^\d{6,10}$/.test(clean)) {
       return NextResponse.json({ error: 'Code must be 6–8 digits.' }, { status: 400 });
     }
 

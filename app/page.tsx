@@ -23,7 +23,7 @@ export default function Home() {
 
     const clean = normalize(code);
 
-    if (!/^\d{6,8}$/.test(clean)) {
+    if (!/^\d{6,10}$/.test(clean)) {
       setStatus('Error: Code must be 6–8 digits.');
       return;
     }
