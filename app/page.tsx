@@ -6,28 +6,40 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
   const [status, setStatus] = useState<string>('');
+  const [isPrinting, setIsPrinting] = useState(false);
 
+  // Keep the scanner input focused, but DON'T use a global window click handler
+  // (it can interfere with button clicks on some browsers/iPad).
   useEffect(() => {
     inputRef.current?.focus();
 
-    const keepFocus = () => inputRef.current?.focus();
-    window.addEventListener('click', keepFocus);
-    document.addEventListener('visibilitychange', keepFocus);
-
-    return () => {
-      window.removeEventListener('click', keepFocus);
-      document.removeEventListener('visibilitychange', keepFocus);
+    const refocus = () => {
+      // tiny delay helps on mobile Safari / iPad
+      setTimeout(() => inputRef.current?.focus(), 0);
     };
+
+    document.addEventListener('visibilitychange', refocus);
+    return () => document.removeEventListener('visibilitychange', refocus);
   }, []);
 
+  function normalizeDigits(raw: string) {
+    // some scanners append \r or \n; keep digits only
+    return raw.replace(/[^\d]/g, '').trim();
+  }
+
   async function print(codeRaw: string) {
-    const code = codeRaw.trim();
+    if (isPrinting) return;
+
+    const code = normalizeDigits(codeRaw);
 
     if (!/^\d{6,8}$/.test(code)) {
       setStatus('Error: Code must be 6–8 digits.');
+      // refocus for next scan
+      setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
 
+    setIsPrinting(true);
     setStatus('Printing…');
 
     try {
@@ -44,17 +56,26 @@ export default function Home() {
     } catch (e: any) {
       setStatus(`Error: ${e?.message ?? 'Unknown error'}`);
     } finally {
+      setIsPrinting(false);
       setValue('');
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'system-ui' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 24,
+        fontFamily: 'system-ui',
+      }}
+    >
       <div style={{ width: '100%', maxWidth: 720 }}>
         <h1 style={{ fontSize: 36, margin: 0 }}>Scan → Print (Big Number)</h1>
         <p style={{ marginTop: 10, opacity: 0.75, fontSize: 16 }}>
-          Scan a barcode (6–8 digits). It will print a centered 4×6 label with the number only.
+          Scan a barcode (6–8 digits). Prints a centered 4×6 label with the number only.
         </p>
 
         <input
@@ -63,11 +84,16 @@ export default function Home() {
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key !== 'Enter') return;
-            print(value);
+            // Prevent form/submit behavior and keep it consistent
+            e.preventDefault();
+            const current = value;
+            print(current);
           }}
-          onBlur={() => inputRef.current?.focus()}
+          onBlur={() => setTimeout(() => inputRef.current?.focus(), 0)}
           inputMode="numeric"
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
           spellCheck={false}
           placeholder="Scan here…"
           style={{
@@ -84,24 +110,27 @@ export default function Home() {
         <div style={{ marginTop: 14, fontSize: 18 }}>{status}</div>
 
         <div style={{ marginTop: 18, opacity: 0.7, fontSize: 14, lineHeight: 1.4 }}>
-          Tip: Most USB scanners act like a keyboard and send Enter after each scan. Click anywhere on the page if the
-          input ever loses focus.
+          Tip: Most USB scanners act like a keyboard and send Enter after each scan.
         </div>
 
         <div style={{ marginTop: 14 }}>
           <button
+            type="button"
+            disabled={isPrinting}
+            onMouseDown={(e) => e.preventDefault()} // prevents focus-stealing quirks
             onClick={() => print(value)}
             style={{
               marginTop: 8,
               padding: '10px 14px',
               borderRadius: 12,
               border: '1px solid #ccc',
-              background: '#fff',
-              cursor: 'pointer',
+              background: isPrinting ? '#f3f3f3' : '#fff',
+              cursor: isPrinting ? 'not-allowed' : 'pointer',
               fontSize: 16,
+              opacity: isPrinting ? 0.7 : 1,
             }}
           >
-            Print
+            {isPrinting ? 'Printing…' : 'Print'}
           </button>
         </div>
       </div>
